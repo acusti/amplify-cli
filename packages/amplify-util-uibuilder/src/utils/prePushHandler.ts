@@ -1,5 +1,4 @@
 import { $TSContext } from 'amplify-cli-core';
-import type { Schema } from '@aws-amplify/datastore';
 import { printer } from 'amplify-prompts';
 import AmplifyUIBuilder from 'aws-sdk/clients/amplifyuibuilder';
 import { AmplifyStudioClient } from '../clients';
@@ -13,9 +12,7 @@ export const prePushHandler = async (context: $TSContext): Promise<void> => {
     return;
   }
   const studioClient = await AmplifyStudioClient.setClientInfo(context);
-  const [formSchemas, localSchema] = await Promise.all<[Promise<{
-    entities: AmplifyUIBuilder.Form[];
-  }>, Promise<Schema>]>([
+  const [formSchemas, localSchema] = await Promise.all([
     studioClient.listForms(),
     context.amplify.invokePluginMethod(
       context,
@@ -26,15 +23,23 @@ export const prePushHandler = async (context: $TSContext): Promise<void> => {
     ),
   ]);
 
-  if (!localSchema) {
+  if (
+    hasModels(localSchema)
+  ) {
+    printDetachedFormsWarning(formSchemas, localSchema);
+  } else {
     printer.debug('Local schema not found');
     return;
   }
-  printDetachedFormsWarning(formSchemas, localSchema);
 };
 
-const printDetachedFormsWarning = (formSchemas: { entities: AmplifyUIBuilder.Form[] }, localSchema: Schema): void => {
-  const modelNames = new Set(Object.keys(localSchema.models));
+const printDetachedFormsWarning = (formSchemas: { entities: AmplifyUIBuilder.Form[] }, localSchema: {models: unknown}): void => {
+  const models = localSchema.models;
+  if (!models || typeof models !== 'object') {
+    printer.debug('Models not found');
+    return;
+  }
+  const modelNames = new Set(Object.keys(models));
   const detachedCustomForms: string[] = [];
 
   formSchemas.entities.forEach(form => {
@@ -49,3 +54,11 @@ const printDetachedFormsWarning = (formSchemas: { entities: AmplifyUIBuilder.For
     printer.warn(`The following form${detachedCustomForms.length === 1 ? '' : 's'} will no longer be available because the connected data model no longer exists: ${detachedCustomForms.join(', ')}`);
   }
 };
+
+const hasModels = (value: unknown): value is { models: unknown } => {
+  return (
+    typeof value === 'object'
+    && value !== null
+    && 'models' in value
+  );
+}
