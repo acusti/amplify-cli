@@ -30,17 +30,21 @@ describe('API Gateway CDK migration', () => {
     deleteProjectDir(projRoot);
   });
 
-  it('migrates on api update', async () => {
-    await addRestApiOldDx(projRoot, { existingLambda: false, apiName: 'restapimig' });
+  it('migrates auth with admin queries', async () => {
+    await addAuthWithDefault(projRoot);
+    await updateAuthAddAdminQueries(projRoot);
     await amplifyPushAuthLegacy(projRoot);
-    await updateRestApi(projRoot, {
-      updateOperation: 'Add another path',
-      newPath: '/foo',
-      expectMigration: true,
-      testingWithLatestCodebase: true,
-    });
+
+    await updateAuthAdminQueriesWithExtMigration(projRoot, { testingWithLatestCodebase: true });
     await amplifyPushAuth(projRoot, true);
-    const cliInputs = getCLIInputs(projRoot, 'api', 'restapimig');
-    expect(cliInputs).toBeDefined();
+
+    const meta = getProjectMeta(projRoot);
+    const authName = Object.keys(meta.auth)[0];
+
+    const authCliInputs = getCLIInputs(projRoot, 'auth', authName);
+    expect(authCliInputs).toBeDefined();
+
+    const adminQueriesCliInputs = getCLIInputs(projRoot, 'api', 'AdminQueries');
+    expect(adminQueriesCliInputs).toBeDefined();
   });
 });
